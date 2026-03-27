@@ -7,6 +7,7 @@
     - [1.1.3. Enable issues](#113-enable-issues)
     - [1.1.4. Add a classmate as a collaborator](#114-add-a-classmate-as-a-collaborator)
     - [1.1.5. Protect your `main` branch](#115-protect-your-main-branch)
+    - [1.1.6. Sync your fork with upstream](#116-sync-your-fork-with-upstream)
   - [1.2. SSH into your VM and set up the environment there](#12-ssh-into-your-vm-and-set-up-the-environment-there)
   - [1.3. Stop Lab 7 services on your VM to free the ports](#13-stop-lab-7-services-on-your-vm-to-free-the-ports)
   - [1.4. Start the services on your VM](#14-start-the-services-on-your-vm)
@@ -47,6 +48,12 @@ We refer to your fork as `fork` and to the original repo as `upstream`.
 
 1. [Protect a branch](../../wiki/github.md#protect-a-branch).
 
+#### 1.1.6. Sync your fork with upstream
+
+1. [Sync your fork](../../wiki/github.md#sync-a-fork) so you have the latest changes from the course repository.
+
+   Do this **before cloning** to the VM, and again whenever the instructors push updates.
+
 ### 1.2. SSH into your VM and set up the environment there
 
 1. [Connect to your VM](../../wiki/vm-access.md#connect-to-the-vm-as-the-user-user-local).
@@ -63,6 +70,58 @@ We refer to your fork as `fork` and to the original repo as `upstream`.
 
    > [!NOTE]
    > The `--recurse-submodules` flag clones the Qwen Code API [submodule](../../wiki/git.md#submodule) included in the repository.
+
+   > [!TIP]
+   > If you already cloned the repo earlier without `--recurse-submodules`, the `qwen-code-api/` directory may be empty and Docker builds will fail later.
+   > From the repo root, run:
+   >
+   > ```terminal
+   > git submodule update --init --recursive
+   > ```
+
+   > [!IMPORTANT]
+   > You will need to **push code from the VM** to GitHub. Set this up now so it works later.
+   >
+   > **If you use VS Code Remote-SSH** — git credentials are forwarded automatically. No extra setup needed.
+   >
+   > **If you use a plain SSH terminal** — pick one of these:
+   >
+   > **Option A — SSH key** (recommended, one-time setup):
+   > 1. On the VM, generate a key (skip if `~/.ssh/id_ed25519.pub` already exists):
+   >
+   >    ```
+   >    ssh-keygen -t ed25519 -C "your-email@example.com"
+   >    ```
+   >
+   >    Press Enter three times to accept defaults (no passphrase is fine).
+   > 2. Print the public key:
+   >
+   >    ```
+   >    cat ~/.ssh/id_ed25519.pub
+   >    ```
+   >
+   > 3. Copy the output. In your browser, go to <https://github.com/settings/keys> → **New SSH key** → paste → **Add SSH key**.
+   > 4. Clone with the SSH URL instead of HTTPS:
+   >
+   >    ```
+   >    git clone --recurse-submodules git@github.com:YOUR_GITHUB_USERNAME/se-toolkit-lab-8.git
+   >    ```
+   >
+   >    Or, if you already cloned via HTTPS, switch the remote:
+   >
+   >    ```
+   >    git remote set-url origin git@github.com:YOUR_GITHUB_USERNAME/se-toolkit-lab-8.git
+   >    ```
+   >
+   > **Option B — Personal access token** (quick, less secure):
+   > 1. In your browser, go to <https://github.com/settings/tokens> → **Generate new token (classic)** → select **`repo`** scope → **Generate token**.
+   > 2. Copy the token. On the VM, run:
+   >
+   >    ```
+   >    git remote set-url origin https://YOUR_TOKEN@github.com/YOUR_GITHUB_USERNAME/se-toolkit-lab-8.git
+   >    ```
+   >
+   > **Verify** — after either option, run: `git push origin main`. It should succeed with no password prompt.
 
 3. Go into the repository and install `Python` dependencies:
 
@@ -222,7 +281,7 @@ docker compose --env-file .env.docker.secret down
 
 The database starts empty. You need to run the ETL pipeline to populate it with data from the autochecker API.
 
-1. Open in a browser: `http://localhost:42002/docs`
+1. Open `http://<your-vm-ip>:42002/docs` in your browser (or `localhost:42002` if you forwarded the port via VS Code).
 
    You should see the Swagger UI page.
 
@@ -252,11 +311,11 @@ The database starts empty. You need to run the ETL pipeline to populate it with 
 
 ### 1.6. Verify the deployment on your VM
 
-1. Open `http://localhost:42002/docs` in a browser.
+1. Open `http://<your-vm-ip>:42002/docs` in your browser.
 
    You should see the Swagger UI with all endpoints.
 
-2. Open `http://localhost:42002/` in a browser.
+2. Open `http://<your-vm-ip>:42002/` in your browser.
 
    You should see the React dashboard. Enter your `LMS_API_KEY` to connect.
 

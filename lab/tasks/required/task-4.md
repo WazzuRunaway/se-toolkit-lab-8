@@ -103,10 +103,11 @@ The backend version in this lab contains a planted bug in a failure path. To sur
 
 1. Use the findings from Parts A and B to identify the planted bug in the backend code and fix it.
 
-2. Redeploy:
+2. Rebuild and redeploy:
 
    ```terminal
-   docker compose --env-file .env.docker.secret up --build -d
+   docker compose --env-file .env.docker.secret build backend
+   docker compose --env-file .env.docker.secret up -d
    ```
 
 3. Trigger the failure path again after the redeploy:
@@ -118,7 +119,7 @@ The backend version in this lab contains a planted bug in a failure path. To sur
 
 4. Restart PostgreSQL.
 
-5. If the web chat disconnected during the redeploy, reopen `http://localhost:42002/flutter` and log in again.
+5. If the web chat disconnected during the redeploy, reopen `http://<your-vm-ip>:42002/flutter` and log in again.
 
 6. Create a fresh short health check in the current chat:
 
