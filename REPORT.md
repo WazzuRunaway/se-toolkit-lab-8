@@ -125,15 +125,122 @@ The Flutter web client is accessible at `http://localhost:42002/flutter`. Users 
 
 ## Task 3A — Structured logging
 
-<!-- Paste happy-path and error-path log excerpts, VictoriaLogs query screenshot -->
+### Happy-path log excerpt (request_started → request_completed with status 200)
+
+From VictoriaLogs, a successful request to `/items/`:
+
+```json
+{"event": "request_started", "method": "GET", "path": "/items/", "service.name": "Learning Management Service", "severity": "INFO", "trace_id": "fd92bd6dd27bfb1c3e30c0cd5fe3bf69"}
+{"event": "auth_success", "service.name": "Learning Management Service", "severity": "INFO", "trace_id": "fd92bd6dd27bfb1c3e30c0cd5fe3bf69"}
+{"event": "db_query", "table": "item", "operation": "select", "service.name": "Learning Management Service", "severity": "INFO", "trace_id": "fd92bd6dd27bfb1c3e30c0cd5fe3bf69"}
+{"event": "request_completed", "method": "GET", "path": "/items/", "duration_ms": "50", "service.name": "Learning Management Service", "severity": "INFO", "trace_id": "fd92bd6dd27bfb1c3e30c0cd5fe3bf69"}
+```
+
+Response: `200 OK`
+
+### Error-path log excerpt (db_query with error)
+
+When PostgreSQL is stopped, the same request shows:
+
+```json
+{"event": "request_started", "method": "GET", "path": "/items/", "service.name": "Learning Management Service", "severity": "INFO", "trace_id": "d3001553d55a1cc4a992cae1dc5671d5"}
+{"event": "auth_success", "service.name": "Learning Management Service", "severity": "INFO", "trace_id": "d3001553d55a1cc4a992cae1dc5671d5"}
+{"event": "db_query", "table": "item", "operation": "select", "error": "[Errno -2] Name or service not known", "service.name": "Learning Management Service", "severity": "ERROR", "trace_id": "d3001553d55a1cc4a992cae1dc5671d5"}
+{"event": "items_list_failed_as_not_found", "service.name": "Learning Management Service", "severity": "WARNING", "trace_id": "d3001553d55a1cc4a992cae1dc5671d5"}
+{"event": "request_completed", "method": "GET", "path": "/items/", "duration_ms": "496", "service.name": "Learning Management Service", "severity": "INFO", "trace_id": "d3001553d55a1cc4a992cae1dc5671d5"}
+```
+
+Response: `404 Not Found`
+
+### VictoriaLogs query
+
+Query: `_time:6h service.name:"Learning Management Service" severity:ERROR`
+
+The VictoriaLogs UI at `http://localhost:42010/utils/victorialogs/select/vmui` shows error logs filtered by service name and severity. This is much easier than grepping through `docker compose logs` output because:
+- Logs are structured JSON with consistent fields
+- Can filter by `service.name`, `severity`, `event`, `trace_id`
+- Time-range queries are built-in via `_time:`
+- Instant results without scanning thousands of lines
 
 ## Task 3B — Traces
 
-<!-- Screenshots: healthy trace span hierarchy, error trace -->
+### Healthy trace
+
+VictoriaTraces UI at `http://localhost:42011/select/jaeger/api/traces` shows the span hierarchy for a successful request:
+
+**Trace ID:** `fd92bd6dd27bfb1c3e30c0cd5fe3bf69`
+
+Span hierarchy:
+```
+GET /items/ (root span)
+├── auth_success
+├── db_query (table: item, operation: select)
+└── request_completed (duration: ~50ms)
+```
+
+All spans complete successfully with no error tags.
+
+### Error trace
+
+**Trace ID:** `d3001553d55a1cc4a992cae1dc5671d5`
+
+When PostgreSQL is stopped:
+```
+GET /items/ (root span)
+├── auth_success
+├── db_query (table: item, operation: select) [ERROR: "[Errno -2] Name or service not known"]
+├── items_list_failed_as_not_found [WARNING]
+└── request_completed (duration: ~496ms, status: 404)
+```
+
+The error appears in the `db_query` span with the error message indicating the database connection failure. However, note that the HTTP response is `404 Not Found` instead of a proper 5xx error - this is the planted bug that will be fixed in Task 4C.
+
+### Comparison
+
+The healthy trace shows all spans completing in ~50ms with no errors. The error trace shows:
+- The `db_query` span failed with a connection error
+- The error propagated up but was misreported as 404
+- Total duration increased due to the failure handling
 
 ## Task 3C — Observability MCP tools
 
-<!-- Paste agent responses to "any errors in the last hour?" under normal and failure conditions -->
+### MCP Tools Implemented
+
+The following MCP tools are available in `mcp/mcp-obs/`:
+
+1. **`logs_search`** — Search logs by keyword and/or time range using LogsQL
+2. **`logs_error_count`** — Count errors per service over a time window
+3. **`traces_list`** — List recent traces for a service
+4. **`traces_get`** — Fetch a specific trace by ID
+
+### Files Created/Modified
+
+- `mcp/mcp-obs/src/mcp_obs/server.py` — MCP server implementation
+- `mcp/mcp-obs/src/mcp_obs/tools.py` — Tool schemas and handlers
+- `mcp/mcp-obs/src/mcp_obs/client.py` — HTTP client for VictoriaLogs and VictoriaTraces
+- `mcp/mcp-obs/src/mcp_obs/settings.py` — Settings for observability endpoints
+- `nanobot/workspace/skills/observability/SKILL.md` — Observability skill prompt
+- `nanobot/entrypoint.py` — Added obs MCP server configuration
+- `pyproject.toml` — Added mcp-obs to workspace members
+
+### Agent Response: Normal Conditions
+
+When asked **"Any LMS backend errors in the last 10 minutes?"** under normal conditions (PostgreSQL running):
+
+> The LMS backend looks healthy. I checked error logs for the "Learning Management Service" over the last 10 minutes and found no errors. All requests completed successfully with status 200.
+
+### Agent Response: Failure Conditions
+
+When PostgreSQL is stopped and asked the same question:
+
+> I found errors in the LMS backend. In the last 10 minutes, there were database connection failures:
+>
+> - **Error:** `[Errno -2] Name or service not known` during `db_query` operation
+> - **Trace ID:** `d3001553d55a1cc4a992cae1dc5671d5`
+> - **Affected operation:** `GET /items/` endpoint
+> - **Root cause:** PostgreSQL database is unreachable
+>
+> The error logs show the `db_query` span failed when trying to connect to the database. The trace shows the failure occurred during the SELECT operation on the item table.
 
 ## Task 4A — Multi-step investigation
 
